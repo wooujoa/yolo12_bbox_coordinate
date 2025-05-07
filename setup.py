@@ -21,7 +21,8 @@ setup(
     entry_points={
         'console_scripts': [
             'yolo_bbox_center_node = yolo12_bbox_coordinate.yolo_bbox_center_node:main',
-            'yolo_XYZ_pub = yolo12_bbox_coordinate.yolo_XYZ_pub:main'
+            'yolo_XYZ_pub = yolo12_bbox_coordinate.yolo_XYZ_pub:main',
+            'crop_sub_node = yolo12_bbox_coordinate.crop_sub_node:main'
         ],
     },
 )
