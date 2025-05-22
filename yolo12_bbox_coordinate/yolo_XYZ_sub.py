@@ -19,13 +19,13 @@ class CropListenerNode(Node):
             self.listener_callback,
             10
         )
-        self.get_logger().info("✅ CropListenerNode 시작. '/detected_crops' 수신 대기 중…")
+        self.get_logger().info("CropListenerNode 시작. '/detected_crops' 수신 대기 중…")
 
     def listener_callback(self, msg: DetectedCropArray):
         total = msg.total_objects
         stamp = msg.header.stamp
         self.get_logger().info(
-            f"\n📬 [{stamp.sec}.{stamp.nanosec:09d}] DetectedCropArray 수신 "
+            f"\n[{stamp.sec}.{stamp.nanosec:09d}] DetectedCropArray 수신 "
             f"(총 {total}개)\n" + "-" * 45
         )
 

@@ -20,7 +20,7 @@ class Yolo3DCenterNode(Node):
         self.camera_info_topic = '/camera/camera/color/camera_info'
 
         self.bridge = CvBridge()
-        self.model = YOLO("/home/jwg/inference/best.pt")
+        self.model = YOLO("/home/jwg/inference/best3.pt")
         self.device = 'cpu'
 
         self.frame_buffer = []
@@ -106,20 +106,20 @@ class Yolo3DCenterNode(Node):
         best_depth = self.depth_buffer[best_index]
         best_detections = self.detection_buffer[best_index]
 
-
+        """
         #camera_info의 내부 파라미터
         fx = self.camera_info.k[0]
         fy = self.camera_info.k[4]
         cx = self.camera_info.k[2]
         cy = self.camera_info.k[5]
 
-        """"
-        # 수동 보정된 내부 파라미터
-        fx = 602.920379
-        fy = 602.920379
-        cx = 320.0
-        cy = 240.0
         """
+        # 수동 보정된 내부 파라미터
+        fx = 590.000000
+        fy = 590.000000
+        cx = 320.000000
+        cy = 240.000000
+        
 
         riped_3d_infos = []
 
@@ -152,18 +152,18 @@ class Yolo3DCenterNode(Node):
             for i, (x, y, z) in enumerate(riped_3d_infos):
                 crop = DetectedCrop()
                 crop.id = i + 1
-                crop.x = float(x)
-                crop.y = float(y)
-                crop.z = float(z)
+                crop.x = float(x * 100)  # m → cm
+                crop.y = float(y * 100)  # m → cm
+                crop.z = float(z * 100)  # m → cm
                 crop_array_msg.objects.append(crop)
                 self.get_logger().info(f"[Publish] ID={crop.id}, X={crop.x:.2f}, Y={crop.y:.2f}, Z={crop.z:.2f}")
 
             self.publisher_.publish(crop_array_msg)
-            self.get_logger().info(f"✅ DetectedCropArray 메시지 전송 완료 (총 {crop_array_msg.total_objects}개)")
+            self.get_logger().info(f"DetectedCropArray 메시지 전송 완료 (총 {crop_array_msg.total_objects}개)")
 
-            self.processed = True  # ✅ 전송이 실제로 이루어졌을 때만 처리 완료로 표시
+            self.processed = True  # 전송이 실제로 이루어졌을 때만 처리 완료로 표시
         else:
-            self.get_logger().warn("⚠️ riped 객체가 없어 메시지 전송 생략됨.")
+            self.get_logger().warn("riped 객체가 없어 메시지 전송 생략됨.")
 
 
 def main(args=None):
