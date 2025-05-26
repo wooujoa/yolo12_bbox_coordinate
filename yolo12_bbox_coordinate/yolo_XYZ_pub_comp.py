@@ -1,6 +1,6 @@
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import Image, CameraInfo
+from sensor_msgs.msg import Image, CompressedImage, CameraInfo
 from std_msgs.msg import Header
 from cv_bridge import CvBridge
 from ultralytics import YOLO
@@ -15,7 +15,9 @@ class Yolo3DCenterNode(Node):
     def __init__(self):
         super().__init__('yolo_3d_center_node')
 
-        self.image_topic = '/camera/camera/color/image_raw'
+        # ✅ 압축된 RGB 이미지 토픽
+        self.image_topic = '/camera/camera/color/image_raw/compressed'
+        # ✅ 압축되지 않은 Depth 이미지 (절대 compressed 사용 금지)
         self.depth_topic = '/camera/camera/aligned_depth_to_color/image_raw'
         self.camera_info_topic = '/camera/camera/color/camera_info'
 
@@ -31,11 +33,11 @@ class Yolo3DCenterNode(Node):
         self.got_image = False
 
         self.camera_info = None
-        self.processed = False  # 전송 여부
+        self.processed = False
 
         self.publisher_ = self.create_publisher(DetectedCropArray, '/detected_crops', 10)
 
-        self.create_subscription(Image, self.image_topic, self.image_callback, 10)
+        self.create_subscription(CompressedImage, self.image_topic, self.compressed_image_callback, 10)
         self.create_subscription(Image, self.depth_topic, self.depth_callback, 10)
         self.create_subscription(CameraInfo, self.camera_info_topic, self.camera_info_callback, 10)
 
@@ -63,14 +65,23 @@ class Yolo3DCenterNode(Node):
             except Exception as e:
                 self.get_logger().error(f"Depth 변환 실패: {e}")
 
-    def image_callback(self, msg):
+    def compressed_image_callback(self, msg):
         if self.frame_count >= self.max_frames or self.camera_info is None:
             return
         self.got_image = True
+
         try:
-            frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+            np_arr = np.frombuffer(msg.data, np.uint8)
+            frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+
+            expected_width = 640
+            expected_height = 480
+            if frame.shape[1] != expected_width or frame.shape[0] != expected_height:
+                self.get_logger().warn(
+                    f"압축 이미지 해상도 불일치: 받은 해상도={frame.shape[1]}x{frame.shape[0]}, 예상={expected_width}x{expected_height}"
+                )
         except Exception as e:
-            self.get_logger().error(f"Image 변환 실패: {e}")
+            self.get_logger().error(f"Compressed Image 디코딩 실패: {e}")
             return
 
         try:
@@ -106,20 +117,10 @@ class Yolo3DCenterNode(Node):
         best_depth = self.depth_buffer[best_index]
         best_detections = self.detection_buffer[best_index]
 
-        """
-        #camera_info의 내부 파라미터
-        fx = self.camera_info.k[0]
-        fy = self.camera_info.k[4]
-        cx = self.camera_info.k[2]
-        cy = self.camera_info.k[5]
-
-        """
-        # 수동 보정된 내부 파라미터
-        fx = 590.000000
-        fy = 590.000000
-        cx = 320.000000
-        cy = 240.000000
-        
+        fx = 590.0
+        fy = 590.0
+        cx = 320.0
+        cy = 240.0
 
         riped_3d_infos = []
 
@@ -152,7 +153,7 @@ class Yolo3DCenterNode(Node):
             for i, (x, y, z) in enumerate(riped_3d_infos):
                 crop = DetectedCrop()
                 crop.id = i + 1
-                crop.x = float(x * 100)  # m → cm
+                crop.x = float(x * 100)
                 crop.y = float(y * 100)
                 crop.z = float(z * 100)
                 crop_array_msg.objects.append(crop)
@@ -161,7 +162,7 @@ class Yolo3DCenterNode(Node):
             self.publisher_.publish(crop_array_msg)
             self.get_logger().info(f"DetectedCropArray 메시지 전송 완료 (총 {crop_array_msg.total_objects}개)")
 
-            self.processed = True  # 전송이 실제로 이루어졌을 때만 처리 완료로 표시
+            self.processed = True
         else:
             self.get_logger().warn("riped 객체가 없어 메시지 전송 생략됨.")
 
