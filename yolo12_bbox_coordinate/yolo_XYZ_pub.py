@@ -153,8 +153,8 @@ class Yolo3DCenterNode(Node):
                 crop = DetectedCrop()
                 crop.id = i + 1
                 crop.x = float(x * 100)  # m → cm
-                crop.y = float(y * 100)  # m → cm
-                crop.z = float(z * 100)  # m → cm
+                crop.y = float(y * 100)
+                crop.z = float(z * 100)
                 crop_array_msg.objects.append(crop)
                 self.get_logger().info(f"[Publish] ID={crop.id}, X={crop.x:.2f}, Y={crop.y:.2f}, Z={crop.z:.2f}")
 
