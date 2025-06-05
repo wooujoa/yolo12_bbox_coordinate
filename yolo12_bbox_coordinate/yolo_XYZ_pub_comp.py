@@ -15,9 +15,9 @@ class Yolo3DCenterNode(Node):
     def __init__(self):
         super().__init__('yolo_3d_center_node')
 
-        # ✅ 압축된 RGB 이미지 토픽
+        # 압축된 RGB 이미지 토픽
         self.image_topic = '/camera/camera/color/image_raw/compressed'
-        # ✅ 압축되지 않은 Depth 이미지 (절대 compressed 사용 금지)
+        # 압축되지 않은 Depth 이미지 (절대 compressed 사용 금지)
         self.depth_topic = '/camera/camera/aligned_depth_to_color/image_raw'
         self.camera_info_topic = '/camera/camera/color/camera_info'
 
