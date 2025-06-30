@@ -7,6 +7,7 @@ from ultralytics import YOLO
 import supervision as sv
 import numpy as np
 import cv2
+import gc  # 메모리 수거
 
 from vision_msgs.msg import DetectedCrop, DetectedCropArray
 
@@ -15,9 +16,7 @@ class Yolo3DCenterNode(Node):
     def __init__(self):
         super().__init__('yolo_3d_center_node')
 
-        # ✅ 압축된 RGB 이미지 토픽
         self.image_topic = '/camera/camera/color/image_raw/compressed'
-        # ✅ 압축되지 않은 Depth 이미지 (절대 compressed 사용 금지)
         self.depth_topic = '/camera/camera/aligned_depth_to_color/image_raw'
         self.camera_info_topic = '/camera/camera/color/camera_info'
 
@@ -61,7 +60,7 @@ class Yolo3DCenterNode(Node):
         if len(self.depth_buffer) < self.max_frames:
             try:
                 depth_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
-                self.depth_buffer.append(depth_image.copy())
+                self.depth_buffer.append(depth_image)  # copy() 제거
             except Exception as e:
                 self.get_logger().error(f"Depth 변환 실패: {e}")
 
@@ -73,13 +72,6 @@ class Yolo3DCenterNode(Node):
         try:
             np_arr = np.frombuffer(msg.data, np.uint8)
             frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-
-            expected_width = 640
-            expected_height = 480
-            if frame.shape[1] != expected_width or frame.shape[0] != expected_height:
-                self.get_logger().warn(
-                    f"압축 이미지 해상도 불일치: 받은 해상도={frame.shape[1]}x{frame.shape[0]}, 예상={expected_width}x{expected_height}"
-                )
         except Exception as e:
             self.get_logger().error(f"Compressed Image 디코딩 실패: {e}")
             return
@@ -87,13 +79,19 @@ class Yolo3DCenterNode(Node):
         try:
             results = self.model(frame, imgsz=640, device=self.device)[0]
             detections = sv.Detections.from_ultralytics(results)
+            self.get_logger().info(f"[YOLO] 감지 객체 수: {len(detections)}")
         except Exception as e:
             self.get_logger().error(f"YOLO 추론 실패 또는 Detection 변환 실패: {e}")
             return
 
-        self.frame_buffer.append(frame.copy())
+        self.frame_buffer.append(frame)  # copy 제거
         self.detection_buffer.append(detections)
         self.frame_count += 1
+
+        self.get_logger().debug(f"버퍼 상태: frame_buffer={len(self.frame_buffer)}, "
+                                f"detection_buffer={len(self.detection_buffer)}, "
+                                f"depth_buffer={len(self.depth_buffer)}")
+
         self.get_logger().info(f"프레임 수신: {self.frame_count}/{self.max_frames}")
 
     def process_best_frame(self):
@@ -161,11 +159,22 @@ class Yolo3DCenterNode(Node):
 
             self.publisher_.publish(crop_array_msg)
             self.get_logger().info(f"DetectedCropArray 메시지 전송 완료 (총 {crop_array_msg.total_objects}개)")
-
-            self.processed = True
         else:
             self.get_logger().warn("riped 객체가 없어 메시지 전송 생략됨.")
 
+        # 메모리 해제 및 GC
+        self.frame_buffer.clear()
+        self.detection_buffer.clear()
+        self.depth_buffer.clear()
+        self.frame_count = 0
+        self.processed = False
+
+        self.get_logger().info("버퍼 초기화 완료. 프레임/메모리 해제됨.")
+        gc.collect()
+        self.get_logger().debug("GC 강제 실행 완료.")
+        
+        self.get_logger().info("처리 완료. 노드를 종료합니다.")
+        rclpy.shutdown()
 
 def main(args=None):
     rclpy.init(args=args)
